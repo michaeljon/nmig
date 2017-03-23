@@ -20,9 +20,9 @@
  */
 'use strict';
 
-const connect              = require('./Connector');
-const log                  = require('./Logger');
-const generateError        = require('./ErrorGenerator');
+const connect = require('./Connector');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
 const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
@@ -36,47 +36,49 @@ const extraConfigProcessor = require('./ExtraConfigProcessor');
  * @returns {String}
  */
 const mapDataTypes = (objDataTypesMap, mySqlDataType) => {
-    let retVal                 = '';
-    let arrDataTypeDetails     = mySqlDataType.split(' ');
-    mySqlDataType              = arrDataTypeDetails[0].toLowerCase();
-    const increaseOriginalSize = arrDataTypeDetails.indexOf('unsigned') !== -1 || arrDataTypeDetails.indexOf('zerofill') !== -1;
-    arrDataTypeDetails         = null;
+  let retVal = '';
+  let arrDataTypeDetails = mySqlDataType.split(' ');
+  mySqlDataType = arrDataTypeDetails[0].toLowerCase();
+  const increaseOriginalSize = arrDataTypeDetails.indexOf('unsigned') !== -1 || arrDataTypeDetails.indexOf('zerofill') !== -1;
+  arrDataTypeDetails = null;
 
-    if (mySqlDataType.indexOf('(') === -1) {
-        // No parentheses detected.
-        retVal = increaseOriginalSize ? objDataTypesMap[mySqlDataType].increased_size : objDataTypesMap[mySqlDataType].type;
+  if (mySqlDataType.indexOf('(') === -1) {
+    // No parentheses detected.
+    retVal = increaseOriginalSize ? objDataTypesMap[mySqlDataType].increased_size : objDataTypesMap[mySqlDataType].type;
+  } else {
+    // Parentheses detected.
+    let arrDataType = mySqlDataType.split('(');
+    const strDataType = arrDataType[0].toLowerCase();
+    const strDataTypeDisplayWidth = arrDataType[1];
+    arrDataType = null;
+
+    if ('enum' === strDataType || 'set' === strDataType) {
+      retVal = 'character varying(255)';
+    } else if ('binary(16)' === mySqlDataType) {
+      retVal = 'uuid';
+    } else if ('decimal' === strDataType || 'numeric' === strDataType) {
+      retVal = objDataTypesMap[strDataType].type + '(' + strDataTypeDisplayWidth;
+    } else if ('decimal(19,2)' === mySqlDataType || objDataTypesMap[strDataType].mySqlVarLenPgSqlFixedLen) {
+      // Should be converted without a length definition.
+      retVal = increaseOriginalSize
+        ? objDataTypesMap[strDataType].increased_size
+        : objDataTypesMap[strDataType].type;
     } else {
-        // Parentheses detected.
-        let arrDataType               = mySqlDataType.split('(');
-        const strDataType             = arrDataType[0].toLowerCase();
-        const strDataTypeDisplayWidth = arrDataType[1];
-        arrDataType                   = null;
-
-        if ('enum' === strDataType || 'set' === strDataType) {
-            retVal = 'character varying(255)';
-        } else if ('decimal' === strDataType || 'numeric' === strDataType) {
-            retVal = objDataTypesMap[strDataType].type + '(' + strDataTypeDisplayWidth;
-        } else if ('decimal(19,2)' === mySqlDataType || objDataTypesMap[strDataType].mySqlVarLenPgSqlFixedLen) {
-            // Should be converted without a length definition.
-            retVal = increaseOriginalSize
-                ? objDataTypesMap[strDataType].increased_size
-                : objDataTypesMap[strDataType].type;
-        } else {
-            // Should be converted with a length definition.
-            retVal = increaseOriginalSize
-                ? objDataTypesMap[strDataType].increased_size + '(' + strDataTypeDisplayWidth
-                : objDataTypesMap[strDataType].type + '(' + strDataTypeDisplayWidth;
-        }
+      // Should be converted with a length definition.
+      retVal = increaseOriginalSize
+        ? objDataTypesMap[strDataType].increased_size + '(' + strDataTypeDisplayWidth
+        : objDataTypesMap[strDataType].type + '(' + strDataTypeDisplayWidth;
     }
+  }
 
-    // Prevent incompatible length (CHARACTER(0) or CHARACTER VARYING(0)).
-    if (retVal === 'character(0)') {
-        retVal = 'character(1)';
-    } else if (retVal === 'character varying(0)') {
-        retVal = 'character varying(1)';
-    }
+  // Prevent incompatible length (CHARACTER(0) or CHARACTER VARYING(0)).
+  if (retVal === 'character(0)') {
+    retVal = 'character(1)';
+  } else if (retVal === 'character varying(0)') {
+    retVal = 'character varying(1)';
+  }
 
-    return retVal;
+  return retVal;
 }
 
 module.exports.mapDataTypes = mapDataTypes;
@@ -90,66 +92,68 @@ module.exports.mapDataTypes = mapDataTypes;
  * @returns {Promise}
  */
 module.exports.createTable = (self, tableName) => {
-    return connect(self).then(() => {
-        return new Promise((resolveCreateTable, rejectCreateTable) => {
-            log(self, '\t--[createTable] Currently creating table: `' + tableName + '`', self._dicTables[tableName].tableLogPath);
-            self._mysql.getConnection((error, connection) => {
+  return connect(self).then(() => {
+    return new Promise((resolveCreateTable, rejectCreateTable) => {
+      log(self, '\t--[createTable] Currently creating table: `' + tableName + '`', self._dicTables[tableName].tableLogPath);
+      self._mysql.getConnection((error, connection) => {
+        if (error) {
+          // The connection is undefined.
+          generateError(self, '\t--[createTable] Cannot connect to MySQL server...\n' + error);
+          rejectCreateTable();
+        } else {
+          const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
+          let sql = 'SHOW FULL COLUMNS FROM `' + originalTableName + '`;';
+          connection.query(sql, (err, rows) => {
+            connection.release();
+
+            if (err) {
+              generateError(self, '\t--[createTable] ' + err, sql);
+              rejectCreateTable();
+            } else {
+              self._dicTables[tableName].arrTableColumns = rows;
+
+              if (self._migrateOnlyData) {
+                return resolveCreateTable();
+              }
+
+              self._pg.connect((error, client, done) => {
                 if (error) {
-                    // The connection is undefined.
-                    generateError(self, '\t--[createTable] Cannot connect to MySQL server...\n' + error);
-                    rejectCreateTable();
+                  generateError(self, '\t--[createTable] Cannot connect to PostgreSQL server...\n' + error, sql);
+                  rejectCreateTable();
                 } else {
-                    const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
-                    let sql                 = 'SHOW FULL COLUMNS FROM `' + originalTableName + '`;';
-                    connection.query(sql, (err, rows) => {
-                        connection.release();
+                  sql = 'CREATE TABLE IF NOT EXISTS "' + self._schema + '"."' + tableName + '"(';
 
-                        if (err) {
-                            generateError(self, '\t--[createTable] ' + err, sql);
-                            rejectCreateTable();
-                        } else {
-                            self._dicTables[tableName].arrTableColumns = rows;
+                  for (let i = 0; i < rows.length; ++i) {
+                    sql += '"' + extraConfigProcessor.getColumnName(self, originalTableName, rows[i].Field, false)
+                      + '" ' + mapDataTypes(self._dataTypesMap, rows[i].Type) + ',';
+                  }
 
-                            if (self._migrateOnlyData) {
-                                return resolveCreateTable();
-                            }
+                  sql += '"' + self._schema + '_' + originalTableName + '_data_chunk_id_temp" BIGINT);';
 
-                            self._pg.connect((error, client, done) => {
-                                if (error) {
-                                    generateError(self, '\t--[createTable] Cannot connect to PostgreSQL server...\n' + error, sql);
-                                    rejectCreateTable();
-                                } else {
-                                    sql = 'CREATE TABLE IF NOT EXISTS "' + self._schema + '"."' + tableName + '"(';
+                  log(self, '\t--[createTable] with command: \n' + sql, self._dicTables[tableName].tableLogPath);
 
-                                    for (let i = 0; i < rows.length; ++i) {
-                                        sql += '"' + extraConfigProcessor.getColumnName(self, originalTableName, rows[i].Field, false)
-                                            +  '" ' + mapDataTypes(self._dataTypesMap, rows[i].Type) + ',';
-                                    }
+                  client.query(sql, err => {
+                    done();
 
-                                    sql += '"' + self._schema + '_' + originalTableName + '_data_chunk_id_temp" BIGINT);';
+                    if (err) {
+                      generateError(self, '\t--[createTable] ' + err, sql);
+                      rejectCreateTable();
+                    } else {
+                      log(
+                        self,
+                        '\t--[createTable] Table "' + self._schema + '"."' + tableName + '" is created...',
+                        self._dicTables[tableName].tableLogPath
+                      );
 
-                                    client.query(sql, err => {
-                                        done();
-
-                                        if (err) {
-                                            generateError(self, '\t--[createTable] ' + err, sql);
-                                            rejectCreateTable();
-                                        } else {
-                                            log(
-                                                self,
-                                                '\t--[createTable] Table "' + self._schema + '"."' + tableName + '" is created...',
-                                                self._dicTables[tableName].tableLogPath
-                                            );
-
-                                            resolveCreateTable();
-                                        }
-                                    });
-                                }
-                            });
-                        }
-                    });
+                      resolveCreateTable();
+                    }
+                  });
                 }
-            });
-        });
+              });
+            }
+          });
+        }
+      });
     });
+  });
 };
