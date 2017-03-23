@@ -39,7 +39,7 @@ const mapDataTypes = tableProcessor.mapDataTypes;
 module.exports = (self, tableName) => {
   return connect(self).then(() => {
     return new Promise(resolve => {
-      log(self, '\t--[processDefault] Defines default values for table: "' + self._schema + '"."' + tableName + '"', self._dicTables[tableName].tableLogPath);
+      log(self, '\t--[processDefault] Defines default values for table: ' + self._schema + '.' + tableName + '', self._dicTables[tableName].tableLogPath);
       const processDefaultPromises = [];
       const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
       const pgSqlNumericTypes = ['money', 'numeric', 'decimal', 'double precision', 'real', 'bigint', 'int', 'smallint'];
@@ -77,9 +77,13 @@ module.exports = (self, tableName) => {
                     false
                   );
 
-                  let sql = 'ALTER TABLE "' + self._schema + '"."' + tableName
-                    + '" ' + 'ALTER COLUMN "' + columnName + '" SET DEFAULT ';
+                  let sql = 'ALTER TABLE ' + self._schema + '.' + tableName
+                    + ' ' + 'ALTER COLUMN ' + columnName + ' SET DEFAULT ';
 
+                  // WARNING: this section (through the next comment) is about dealing with some of the
+                  // stranger things in mysql (broken default value retrieval) and itp data model issues.
+                  // these changes are not generic and do not apply to any other migration that this
+                  // tool would be used for.
                   let specialDefault = null;
 
                   if ('EntityId' === columnName) {
@@ -91,7 +95,7 @@ module.exports = (self, tableName) => {
                       case 'LineItem': specialDefault = " 'A215270C637E11E6B883E82AEA238FE3'::uuid "; break;
                     }
                   }
-                  if ('CreatedDate' == columnName && 'Comment' == tableName) {
+                  if ('UpdatedDate' == columnName && 'Comment' == tableName) {
                     specialDefault = ' CURRENT_TIMESTAMP(6) ';
                   }
 
@@ -104,19 +108,21 @@ module.exports = (self, tableName) => {
                   } else {
                     sql += self._dicTables[tableName].arrTableColumns[i].Default + ';';
                   }
+                  // WARNING: the code above has been modified from the original repo to deal with itp
+                  // specific stuff
 
                   client.query(sql, err => {
                     done();
 
                     if (err) {
-                      const msg2 = '\t--[processDefault] Error occurred when tried to set default value for "'
-                        + self._schema + '"."' + tableName + '"."' + columnName + '"...\n' + err;
+                      const msg2 = '\t--[processDefault] Error occurred when tried to set default value for '
+                        + self._schema + '.' + tableName + '.' + columnName + '...\n' + err;
 
                       generateError(self, msg2, sql);
                       resolveProcessDefault();
                     } else {
-                      const success = '\t--[processDefault] Set default value for "' + self._schema + '"."'
-                        + tableName + '"."' + columnName + '"...';
+                      const success = '\t--[processDefault] Set default value for ' + self._schema + '.'
+                        + tableName + '.' + columnName + '...';
 
                       log(self, success, self._dicTables[tableName].tableLogPath);
                       resolveProcessDefault();

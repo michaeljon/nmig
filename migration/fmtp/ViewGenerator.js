@@ -39,15 +39,10 @@ const getBuffer = +process.version.split('.')[0].slice(1) < 6
  * @returns {String}
  */
 const generateView = (schema, viewName, mysqlViewCode) => {
-  mysqlViewCode = mysqlViewCode.split('`').join('"');
+  mysqlViewCode = mysqlViewCode.replace('`', '');
   const queryStart = mysqlViewCode.indexOf('AS');
   mysqlViewCode = mysqlViewCode.slice(queryStart);
   const arrMysqlViewCode = mysqlViewCode.split(' ');
-
-  console.log();
-  console.log(viewName);
-  console.log(mysqlViewCode);
-  console.log();
 
   for (let i = 0; i < arrMysqlViewCode.length; ++i) {
     if (
@@ -55,11 +50,11 @@ const generateView = (schema, viewName, mysqlViewCode) => {
       || arrMysqlViewCode[i].toLowerCase() === 'join'
       && i + 1 < arrMysqlViewCode.length
     ) {
-      arrMysqlViewCode[i + 1] = '"' + schema + '".' + arrMysqlViewCode[i + 1];
+      arrMysqlViewCode[i + 1] = schema + '.' + arrMysqlViewCode[i + 1];
     }
   }
 
-  return 'CREATE OR REPLACE VIEW "' + schema + '"."' + viewName + '" ' + arrMysqlViewCode.join(' ') + ';';
+  return 'CREATE OR REPLACE VIEW ' + schema + '.' + viewName + ' ' + arrMysqlViewCode.join(' ') + ';';
 }
 
 /**
@@ -161,7 +156,7 @@ module.exports = self => {
                               logNotCreatedView(self, self._viewsToMigrate[i], sql);
                               resolveProcessView2();
                             } else {
-                              log(self, '\t--[processView] View "' + self._schema + '"."' + self._viewsToMigrate[i] + '" is created...');
+                              log(self, '\t--[processView] View ' + self._schema + '.' + self._viewsToMigrate[i] + ' is created...');
                               resolveProcessView2();
                             }
                           });

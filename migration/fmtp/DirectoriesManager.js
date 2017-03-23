@@ -20,9 +20,9 @@
  */
 'use strict';
 
-const fs   = require('fs');
+const fs = require('fs');
 const path = require('path');
-const log  = require('./Logger');
+const log = require('./Logger');
 
 /**
  * Creates temporary directory.
@@ -32,30 +32,30 @@ const log  = require('./Logger');
  * @returns {Promise}
  */
 module.exports.createTemporaryDirectory = self => {
-    return new Promise((resolve, reject) => {
-        log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Creating temporary directory...');
-        fs.stat(self._tempDirPath, (directoryDoesNotExist, stat) => {
-            if (directoryDoesNotExist) {
-                fs.mkdir(self._tempDirPath, self._0777, e => {
-                    if (e) {
-                        const msg = '\t--[DirectoriesManager.createTemporaryDirectory] Cannot perform a migration due to impossibility to create '
-                                + '"temporary_directory": ' + self._tempDirPath;
+  return new Promise((resolve, reject) => {
+    log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Creating temporary directory...');
+    fs.stat(self._tempDirPath, (directoryDoesNotExist, stat) => {
+      if (directoryDoesNotExist) {
+        fs.mkdir(self._tempDirPath, self._0777, e => {
+          if (e) {
+            const msg = '\t--[DirectoriesManager.createTemporaryDirectory] Cannot perform a migration due to impossibility to create '
+              + '"temporary_directory": ' + self._tempDirPath;
 
-                        log(self, msg);
-                        reject();
-                    } else {
-                        log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Temporary directory is created...');
-                        resolve();
-                    }
-                });
-            } else if (!stat.isDirectory()) {
-                log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Cannot perform a migration due to unexpected error');
-                reject();
-            } else {
-                resolve();
-            }
+            log(self, msg);
+            reject();
+          } else {
+            log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Temporary directory is created...');
+            resolve();
+          }
         });
+      } else if (!stat.isDirectory()) {
+        log(self, '\t--[DirectoriesManager.createTemporaryDirectory] Cannot perform a migration due to unexpected error');
+        reject();
+      } else {
+        resolve();
+      }
     });
+  });
 };
 
 /**
@@ -66,43 +66,43 @@ module.exports.createTemporaryDirectory = self => {
  * @returns {Promise}
  */
 module.exports.removeTemporaryDirectory = self => {
-    return new Promise(resolve => {
-        fs.readdir(self._tempDirPath, (err, arrContents) => {
-            let msg = '';
+  return new Promise(resolve => {
+    fs.readdir(self._tempDirPath, (err, arrContents) => {
+      let msg = '';
 
-            if (err) {
-                msg = '\t--[DirectoriesManager.removeTemporaryDirectory] Note, TemporaryDirectory located at "'
-                    + self._tempDirPath + '" is not removed \n\t--[DirectoriesManager.removeTemporaryDirectory] ' + err;
+      if (err) {
+        msg = '\t--[DirectoriesManager.removeTemporaryDirectory] Note, TemporaryDirectory located at '
+          + self._tempDirPath + ' is not removed \n\t--[DirectoriesManager.removeTemporaryDirectory] ' + err;
 
-                log(self, msg);
-                resolve();
+        log(self, msg);
+        resolve();
 
+      } else {
+        const promises = [];
+
+        for (let i = 0; i < arrContents.length; ++i) {
+          promises.push(new Promise(resolveUnlink => {
+            fs.unlink(path.join(self._tempDirPath, arrContents[i]), () => resolveUnlink());
+          }));
+        }
+
+        Promise.all(promises).then(() => {
+          fs.rmdir(self._tempDirPath, error => {
+            if (error) {
+              msg = '\t--[DirectoriesManager.removeTemporaryDirectory] Note, TemporaryDirectory located at '
+                + self._tempDirPath + ' is not removed \n\t--[DirectoriesManager.removeTemporaryDirectory] ' + error;
             } else {
-                const promises = [];
-
-                for (let i = 0; i < arrContents.length; ++i) {
-                    promises.push(new Promise(resolveUnlink => {
-                        fs.unlink(path.join(self._tempDirPath, arrContents[i]), () => resolveUnlink());
-                    }));
-                }
-
-                Promise.all(promises).then(() => {
-                    fs.rmdir(self._tempDirPath, error => {
-                        if (error) {
-                            msg = '\t--[DirectoriesManager.removeTemporaryDirectory] Note, TemporaryDirectory located at "'
-                                + self._tempDirPath + '" is not removed \n\t--[DirectoriesManager.removeTemporaryDirectory] ' + error;
-                        } else {
-                            msg = '\t--[DirectoriesManager.removeTemporaryDirectory] TemporaryDirectory located at "'
-                                + self._tempDirPath + '" is removed';
-                        }
-
-                        log(self, msg);
-                        resolve();
-                    });
-                });
+              msg = '\t--[DirectoriesManager.removeTemporaryDirectory] TemporaryDirectory located at '
+                + self._tempDirPath + ' is removed';
             }
+
+            log(self, msg);
+            resolve();
+          });
         });
+      }
     });
+  });
 };
 
 /**
@@ -113,29 +113,29 @@ module.exports.removeTemporaryDirectory = self => {
  * @returns {Promise}
  */
 module.exports.createLogsDirectory = self => {
-    return new Promise((resolve, reject) => {
-        console.log('\t--[DirectoriesManager.createLogsDirectory] Creating logs directory...');
-        fs.stat(self._logsDirPath, (directoryDoesNotExist, stat) => {
-            if (directoryDoesNotExist) {
-                fs.mkdir(self._logsDirPath, self._0777, e => {
-                    if (e) {
-                        const msg = '\t--[DirectoriesManager.createLogsDirectory] Cannot perform a migration due to impossibility to create '
-                            + '"logs_directory": ' + self._logsDirPath;
+  return new Promise((resolve, reject) => {
+    console.log('\t--[DirectoriesManager.createLogsDirectory] Creating logs directory...');
+    fs.stat(self._logsDirPath, (directoryDoesNotExist, stat) => {
+      if (directoryDoesNotExist) {
+        fs.mkdir(self._logsDirPath, self._0777, e => {
+          if (e) {
+            const msg = '\t--[DirectoriesManager.createLogsDirectory] Cannot perform a migration due to impossibility to create '
+              + '"logs_directory": ' + self._logsDirPath;
 
-                        console.log(msg);
-                        reject();
-                    } else {
-                        log(self, '\t--[DirectoriesManager.createLogsDirectory] Logs directory is created...');
-                        resolve();
-                    }
-                });
-            } else if (!stat.isDirectory()) {
-                console.log('\t--[DirectoriesManager.createLogsDirectory] Cannot perform a migration due to unexpected error');
-                reject();
-            } else {
-                log(self, '\t--[DirectoriesManager.createLogsDirectory] Logs directory already exists...');
-                resolve();
-            }
+            console.log(msg);
+            reject();
+          } else {
+            log(self, '\t--[DirectoriesManager.createLogsDirectory] Logs directory is created...');
+            resolve();
+          }
         });
+      } else if (!stat.isDirectory()) {
+        console.log('\t--[DirectoriesManager.createLogsDirectory] Cannot perform a migration due to unexpected error');
+        reject();
+      } else {
+        log(self, '\t--[DirectoriesManager.createLogsDirectory] Logs directory already exists...');
+        resolve();
+      }
     });
+  });
 };

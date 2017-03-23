@@ -20,8 +20,8 @@
  */
 'use strict';
 
-const connect       = require('./Connector');
-const log           = require('./Logger');
+const connect = require('./Connector');
+const log = require('./Logger');
 const generateError = require('./ErrorGenerator');
 
 /**
@@ -33,29 +33,29 @@ const generateError = require('./ErrorGenerator');
  * @returns {Promise}
  */
 module.exports.get = (self, param) => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            self._pg.connect((error, client, done) => {
-                if (error) {
-                    generateError(self, '\t--[MigrationStateManager.get] Cannot connect to PostgreSQL server...\n' + error);
-                    resolve(false);
-                } else {
-                    const sql = 'SELECT ' + param + ' FROM "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName + '";';
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      self._pg.connect((error, client, done) => {
+        if (error) {
+          generateError(self, '\t--[MigrationStateManager.get] Cannot connect to PostgreSQL server...\n' + error);
+          resolve(false);
+        } else {
+          const sql = 'SELECT ' + param + ' FROM ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName + ';';
 
-                    client.query(sql, (err, data) => {
-                        done();
+          client.query(sql, (err, data) => {
+            done();
 
-                        if (err) {
-                            generateError(self, '\t--[MigrationStateManager.get] ' + err, sql);
-                            resolve(false);
-                        } else {
-                            resolve(data.rows[0][param]);
-                        }
-                    });
-                }
-            });
-        });
+            if (err) {
+              generateError(self, '\t--[MigrationStateManager.get] ' + err, sql);
+              resolve(false);
+            } else {
+              resolve(data.rows[0][param]);
+            }
+          });
+        }
+      });
     });
+  });
 };
 
 /**
@@ -67,129 +67,129 @@ module.exports.get = (self, param) => {
  * @returns {Promise}
  */
 module.exports.set = (self, param) => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            self._pg.connect((error, client, done) => {
-                if (error) {
-                    generateError(self, '\t--[MigrationStateManager.set] Cannot connect to PostgreSQL server...\n' + error);
-                    resolve();
-                } else {
-                    const sql = 'UPDATE "' + self._schema + '"."state_logs_'
-                        + self._schema + self._mySqlDbName + '" SET ' + param + ' = TRUE;';
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      self._pg.connect((error, client, done) => {
+        if (error) {
+          generateError(self, '\t--[MigrationStateManager.set] Cannot connect to PostgreSQL server...\n' + error);
+          resolve();
+        } else {
+          const sql = 'UPDATE ' + self._schema + '.state_logs_'
+            + self._schema + self._mySqlDbName + ' SET ' + param + ' = TRUE;';
 
-                    client.query(sql, err => {
-                        done();
+          client.query(sql, err => {
+            done();
 
-                        if (err) {
-                            generateError(self, '\t--[MigrationStateManager.set] ' + err, sql);
-                        }
+            if (err) {
+              generateError(self, '\t--[MigrationStateManager.set] ' + err, sql);
+            }
 
-                        resolve();
-                    });
-                }
-            });
-        });
+            resolve();
+          });
+        }
+      });
     });
+  });
 };
 
 /**
- * Create the "{schema}"."state_logs_{self._schema + self._mySqlDbName} temporary table."
+ * Create the {schema}.state_logs_{self._schema + self._mySqlDbName} temporary table.
  *
  * @param {Conversion} self
  *
  * @returns {Promise}
  */
 module.exports.createStateLogsTable = self => {
-    return connect(self).then(() => {
-        return new Promise((resolve, reject) => {
-            self._pg.connect((error, client, done) => {
-                if (error) {
-                    generateError(self, '\t--[createStateLogsTable] Cannot connect to PostgreSQL server...\n' + error);
-                    reject();
+  return connect(self).then(() => {
+    return new Promise((resolve, reject) => {
+      self._pg.connect((error, client, done) => {
+        if (error) {
+          generateError(self, '\t--[createStateLogsTable] Cannot connect to PostgreSQL server...\n' + error);
+          reject();
+        } else {
+          let sql = 'CREATE TABLE IF NOT EXISTS ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName
+            + '('
+            + 'tables_loaded BOOLEAN,'
+            + 'per_table_constraints_loaded BOOLEAN,'
+            + 'foreign_keys_loaded BOOLEAN,'
+            + 'views_loaded BOOLEAN'
+            + ');';
+
+          client.query(sql, err => {
+            if (err) {
+              done();
+              generateError(self, '\t--[createStateLogsTable] ' + err, sql);
+              reject();
+            } else {
+              sql = 'SELECT COUNT(1) AS cnt FROM ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName + ';';
+              client.query(sql, (errorCount, result) => {
+                if (errorCount) {
+                  done();
+                  generateError(self, '\t--[createStateLogsTable] ' + errorCount, sql);
+                  reject();
+                } else if (+result.rows[0].cnt === 0) {
+                  sql = 'INSERT INTO ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName
+                    + ' VALUES(FALSE, FALSE, FALSE, FALSE);';
+
+                  client.query(sql, errorInsert => {
+                    done();
+
+                    if (errorInsert) {
+                      generateError(self, '\t--[createStateLogsTable] ' + errorInsert, sql);
+                      reject();
+                    } else {
+                      const msg = '\t--[createStateLogsTable] table ' + self._schema + '.state_logs_'
+                        + self._schema + self._mySqlDbName + ' is created...';
+
+                      log(self, msg);
+                      resolve();
+                    }
+                  });
                 } else {
-                    let sql = 'CREATE TABLE IF NOT EXISTS "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName
-                            + '"('
-                            + '"tables_loaded" BOOLEAN,'
-                            + '"per_table_constraints_loaded" BOOLEAN,'
-                            + '"foreign_keys_loaded" BOOLEAN,'
-                            + '"views_loaded" BOOLEAN'
-                            + ');';
+                  const msg2 = '\t--[createStateLogsTable] table ' + self._schema + '.state_logs_'
+                    + self._schema + self._mySqlDbName + ' is created...';
 
-                    client.query(sql, err => {
-                        if (err) {
-                            done();
-                            generateError(self, '\t--[createStateLogsTable] ' + err, sql);
-                            reject();
-                        } else {
-                            sql = 'SELECT COUNT(1) AS cnt FROM "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName + '";';
-                            client.query(sql, (errorCount, result) => {
-                                if (errorCount) {
-                                    done();
-                                    generateError(self, '\t--[createStateLogsTable] ' + errorCount, sql);
-                                    reject();
-                                } else if (+result.rows[0].cnt === 0) {
-                                    sql = 'INSERT INTO "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName
-                                        + '" VALUES(FALSE, FALSE, FALSE, FALSE);';
-
-                                    client.query(sql, errorInsert => {
-                                        done();
-
-                                        if (errorInsert) {
-                                            generateError(self, '\t--[createStateLogsTable] ' + errorInsert, sql);
-                                            reject();
-                                        } else {
-                                            const msg = '\t--[createStateLogsTable] table "' + self._schema + '"."state_logs_'
-                                                + self._schema + self._mySqlDbName + '" is created...';
-
-                                            log(self, msg);
-                                            resolve();
-                                        }
-                                    });
-                                } else {
-                                    const msg2 = '\t--[createStateLogsTable] table "' + self._schema + '"."state_logs_'
-                                        + self._schema + self._mySqlDbName + '" is created...';
-
-                                    log(self, msg2);
-                                    resolve();
-                                }
-                            });
-                        }
-                    });
+                  log(self, msg2);
+                  resolve();
                 }
-            });
-        });
+              });
+            }
+          });
+        }
+      });
     });
+  });
 };
 
 /**
- * Drop the "{schema}"."state_logs_{self._schema + self._mySqlDbName} temporary table."
+ * Drop the {schema}.state_logs_{self._schema + self._mySqlDbName} temporary table.
  *
  * @param {Conversion} self
  *
  * @returns {Promise}
  */
 module.exports.dropStateLogsTable = self => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            self._pg.connect((error, client, done) => {
-                if (error) {
-                    generateError(self, '\t--[dropStateLogsTable] Cannot connect to PostgreSQL server...\n' + error);
-                    resolve();
-                } else {
-                    const sql = 'DROP TABLE "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName + '";';
-                    client.query(sql, err => {
-                        done();
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      self._pg.connect((error, client, done) => {
+        if (error) {
+          generateError(self, '\t--[dropStateLogsTable] Cannot connect to PostgreSQL server...\n' + error);
+          resolve();
+        } else {
+          const sql = 'DROP TABLE ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName + ';';
+          client.query(sql, err => {
+            done();
 
-                        if (err) {
-                            generateError(self, '\t--[dropStateLogsTable] ' + err, sql);
-                        } else {
-                            log(self, '\t--[dropStateLogsTable] table "' + self._schema + '"."state_logs_' + self._schema + self._mySqlDbName + '" is dropped...');
-                        }
+            if (err) {
+              generateError(self, '\t--[dropStateLogsTable] ' + err, sql);
+            } else {
+              log(self, '\t--[dropStateLogsTable] table ' + self._schema + '.state_logs_' + self._schema + self._mySqlDbName + ' is dropped...');
+            }
 
-                        resolve();
-                    });
-                }
-            });
-        });
+            resolve();
+          });
+        }
+      });
     });
+  });
 };

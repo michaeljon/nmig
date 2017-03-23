@@ -20,7 +20,7 @@
  */
 'use strict';
 
-const connect       = require('./Connector');
+const connect = require('./Connector');
 const generateError = require('./ErrorGenerator');
 
 /**
@@ -32,37 +32,37 @@ const generateError = require('./ErrorGenerator');
  * @returns {Promise}
  */
 module.exports = self => {
-    return connect(self).then(() => {
-        return new Promise((resolve, reject) => {
-            self._pg.connect((error, client, done) => {
-                if (error) {
-                    generateError(self, '\t--[createSchema] Cannot connect to PostgreSQL server...\n' + error);
-                    reject();
-                } else {
-                    let sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '" + self._schema + "';";
-                    client.query(sql, (err, result) => {
-                        if (err) {
-                            done();
-                            generateError(self, '\t--[createSchema] ' + err, sql);
-                            reject();
-                        } else if (result.rows.length === 0) {
-                            sql = 'CREATE SCHEMA "' + self._schema + '";';
-                            client.query(sql, err => {
-                                done();
+  return connect(self).then(() => {
+    return new Promise((resolve, reject) => {
+      self._pg.connect((error, client, done) => {
+        if (error) {
+          generateError(self, '\t--[createSchema] Cannot connect to PostgreSQL server...\n' + error);
+          reject();
+        } else {
+          let sql = "SELECT schema_name FROM information_schema.schemata WHERE schema_name = '" + self._schema + "';";
+          client.query(sql, (err, result) => {
+            if (err) {
+              done();
+              generateError(self, '\t--[createSchema] ' + err, sql);
+              reject();
+            } else if (result.rows.length === 0) {
+              sql = 'CREATE SCHEMA ' + self._schema + ';';
+              client.query(sql, err => {
+                done();
 
-                                if (err) {
-                                    generateError(self, '\t--[createSchema] ' + err, sql);
-                                    reject();
-                                } else {
-                                    resolve();
-                                }
-                            });
-                        } else {
-                            resolve();
-                        }
-                    });
+                if (err) {
+                  generateError(self, '\t--[createSchema] ' + err, sql);
+                  reject();
+                } else {
+                  resolve();
                 }
-            });
-        });
+              });
+            } else {
+              resolve();
+            }
+          });
+        }
+      });
     });
+  });
 };

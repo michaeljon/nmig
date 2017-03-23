@@ -20,10 +20,10 @@
  */
 'use strict';
 
-const log                   = require('./Logger');
-const generateError         = require('./ErrorGenerator');
-const connect               = require('./Connector');
-const extraConfigProcessor  = require('./ExtraConfigProcessor');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
+const connect = require('./Connector');
+const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
  * Create table comments.
@@ -34,56 +34,56 @@ const extraConfigProcessor  = require('./ExtraConfigProcessor');
  * @returns {Promise}
  */
 const processTableComments = (self, tableName) => {
-    return new Promise(resolve => {
-        self._mysql.getConnection((error, connection) => {
-            if (error) {
-                // The connection is undefined.
-                generateError(self, '\t--[processTableComments] Cannot connect to MySQL server...\n\t' + error);
+  return new Promise(resolve => {
+    self._mysql.getConnection((error, connection) => {
+      if (error) {
+        // The connection is undefined.
+        generateError(self, '\t--[processTableComments] Cannot connect to MySQL server...\n\t' + error);
+        resolve();
+      } else {
+        let sql = "SELECT table_comment AS table_comment "
+          + "FROM information_schema.tables "
+          + "WHERE table_schema = '" + self._mySqlDbName + "' "
+          + "AND table_name = '" + extraConfigProcessor.getTableName(self, tableName, true) + "';";
+
+        connection.query(sql, (err, rows) => {
+          connection.release();
+
+          if (err) {
+            generateError(self, '\t--[processTableComments] ' + err, sql);
+            resolve();
+          } else {
+            self._pg.connect((e, client, done) => {
+              if (e) {
+                generateError(self, '\t--[processTableComments] Cannot connect to PostgreSQL server...\n' + e);
                 resolve();
-            } else {
-                let sql = "SELECT table_comment AS table_comment "
-                        + "FROM information_schema.tables "
-                        + "WHERE table_schema = '" + self._mySqlDbName + "' "
-                        + "AND table_name = '" + extraConfigProcessor.getTableName(self, tableName, true) + "';";
+              } else {
+                sql = 'COMMENT ON TABLE ' + self._schema + '.' + tableName + ' IS ' + '\'' + rows[0].table_comment + '\';';
 
-                connection.query(sql, (err, rows) => {
-                    connection.release();
+                client.query(sql, queryError => {
+                  done();
 
-                    if (err) {
-                        generateError(self, '\t--[processTableComments] ' + err, sql);
-                        resolve();
-                    } else {
-                        self._pg.connect((e, client, done) => {
-                            if (e) {
-                                generateError(self, '\t--[processTableComments] Cannot connect to PostgreSQL server...\n' + e);
-                                resolve();
-                            } else {
-                                sql = 'COMMENT ON TABLE "' + self._schema + '"."' + tableName + '" IS ' + '\'' + rows[0].table_comment + '\';';
+                  if (queryError) {
+                    const msg = '\t--[processTableComments] Error while processing comment for '
+                      + self._schema + '.' + tableName + '...\n' + queryError;
 
-                                client.query(sql, queryError => {
-                                    done();
+                    generateError(self, msg, sql);
+                    resolve();
+                  } else {
+                    const success = '\t--[processTableComments] Successfully set comment for table '
+                      + self._schema + '.' + tableName;
 
-                                    if (queryError) {
-                                        const msg = '\t--[processTableComments] Error while processing comment for "'
-                                            + self._schema + '"."' + tableName + '"...\n' + queryError;
-
-                                        generateError(self, msg, sql);
-                                        resolve();
-                                    } else {
-                                        const success = '\t--[processTableComments] Successfully set comment for table "'
-                                            + self._schema + '"."' + tableName + '"';
-
-                                        log(self, success, self._dicTables[tableName].tableLogPath);
-                                        resolve();
-                                    }
-                                });
-                            }
-                        });
-                    }
+                    log(self, success, self._dicTables[tableName].tableLogPath);
+                    resolve();
+                  }
                 });
-            }
+              }
+            });
+          }
         });
+      }
     });
+  });
 }
 
 /**
@@ -95,55 +95,55 @@ const processTableComments = (self, tableName) => {
  * @returns {Promise}
  */
 const processColumnsComments = (self, tableName) => {
-    return new Promise(resolve => {
-        const arrCommentPromises = [];
-        const originalTableName  = extraConfigProcessor.getTableName(self, tableName, true);
+  return new Promise(resolve => {
+    const arrCommentPromises = [];
+    const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
 
-        for (let i = 0; i < self._dicTables[tableName].arrTableColumns.length; ++i) {
-            if (self._dicTables[tableName].arrTableColumns[i].Comment !== '') {
-                arrCommentPromises.push(
-                    new Promise(resolveComment => {
-                        self._pg.connect((error, client, done) => {
-                            if (error) {
-                                generateError(self, '\t--[processColumnsComments] Cannot connect to PostgreSQL server...\n' + error);
-                                resolveComment();
-                            } else {
-                                const columnName = extraConfigProcessor.getColumnName(
-                                    self,
-                                    originalTableName,
-                                    self._dicTables[tableName].arrTableColumns[i].Field,
-                                    false
-                                );
-
-                                const sql = 'COMMENT ON COLUMN "' + self._schema + '"."' + tableName + '"."'
-                                    + columnName + '" IS \'' + self._dicTables[tableName].arrTableColumns[i].Comment + '\';';
-
-                                client.query(sql, err => {
-                                    done();
-
-                                    if (err) {
-                                        const msg = '\t--[processColumnsComments] Error while processing comment for "' + self._schema + '"."'
-                                            + tableName + '"."' + columnName + '"...\n' + err;
-
-                                        generateError(self, msg, sql);
-                                        resolveComment();
-                                    } else {
-                                        const success = '\t--[processColumnsComments] Set comment for "' + self._schema + '"."' + tableName
-                                            + '" column: "' + columnName + '"...';
-
-                                        log(self, success, self._dicTables[tableName].tableLogPath);
-                                        resolveComment();
-                                    }
-                                });
-                            }
-                        });
-                    })
+    for (let i = 0; i < self._dicTables[tableName].arrTableColumns.length; ++i) {
+      if (self._dicTables[tableName].arrTableColumns[i].Comment !== '') {
+        arrCommentPromises.push(
+          new Promise(resolveComment => {
+            self._pg.connect((error, client, done) => {
+              if (error) {
+                generateError(self, '\t--[processColumnsComments] Cannot connect to PostgreSQL server...\n' + error);
+                resolveComment();
+              } else {
+                const columnName = extraConfigProcessor.getColumnName(
+                  self,
+                  originalTableName,
+                  self._dicTables[tableName].arrTableColumns[i].Field,
+                  false
                 );
-            }
-        }
 
-        Promise.all(arrCommentPromises).then(() => resolve());
-    });
+                const sql = 'COMMENT ON COLUMN ' + self._schema + '.' + tableName + '.'
+                  + columnName + ' IS \'' + self._dicTables[tableName].arrTableColumns[i].Comment + '\';';
+
+                client.query(sql, err => {
+                  done();
+
+                  if (err) {
+                    const msg = '\t--[processColumnsComments] Error while processing comment for ' + self._schema + '.'
+                      + tableName + '.' + columnName + '...\n' + err;
+
+                    generateError(self, msg, sql);
+                    resolveComment();
+                  } else {
+                    const success = '\t--[processColumnsComments] Set comment for ' + self._schema + '.' + tableName
+                      + ' column: ' + columnName + '...';
+
+                    log(self, success, self._dicTables[tableName].tableLogPath);
+                    resolveComment();
+                  }
+                });
+              }
+            });
+          })
+        );
+      }
+    }
+
+    Promise.all(arrCommentPromises).then(() => resolve());
+  });
 }
 
 /**
@@ -155,14 +155,14 @@ const processColumnsComments = (self, tableName) => {
  * @returns {Promise}
  */
 module.exports = (self, tableName) => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            const msg = '\t--[CommentsProcessor] Creates comments for table "' + self._schema + '"."' + tableName + '"...';
-            log(self, msg, self._dicTables[tableName].tableLogPath);
-            Promise.all([
-                processTableComments(self, tableName),
-                processColumnsComments(self, tableName)
-            ]).then(() => resolve());
-        });
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      const msg = '\t--[CommentsProcessor] Creates comments for table ' + self._schema + + tableName + '...';
+      log(self, msg, self._dicTables[tableName].tableLogPath);
+      Promise.all([
+        processTableComments(self, tableName),
+        processColumnsComments(self, tableName)
+      ]).then(() => resolve());
     });
+  });
 };

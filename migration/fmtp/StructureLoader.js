@@ -20,15 +20,15 @@
  */
 'use strict';
 
-const Table                 = require('./Table');
-const tableProcessor        = require('./TableProcessor');
-const connect               = require('./Connector');
-const log                   = require('./Logger');
-const generateError         = require('./ErrorGenerator');
-const prepareDataChunks     = require('./DataChunksProcessor');
+const Table = require('./Table');
+const tableProcessor = require('./TableProcessor');
+const connect = require('./Connector');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
+const prepareDataChunks = require('./DataChunksProcessor');
 const migrationStateManager = require('./MigrationStateManager');
-const extraConfigProcessor  = require('./ExtraConfigProcessor');
-const createTable           = tableProcessor.createTable;
+const extraConfigProcessor = require('./ExtraConfigProcessor');
+const createTable = tableProcessor.createTable;
 
 /**
  * Processes current table before data loading.
@@ -40,13 +40,13 @@ const createTable           = tableProcessor.createTable;
  * @returns {Promise}
  */
 const processTableBeforeDataLoading = (self, tableName, stateLog) => {
-    return connect(self).then(() => {
-        return createTable(self, tableName);
-    }).then(() => {
-        return prepareDataChunks(self, tableName, stateLog);
-    }).catch(() => {
-        generateError(self, '\t--[processTableBeforeDataLoading] Cannot create table "' + self._schema + '"."' + tableName + '"...');
-    });
+  return connect(self).then(() => {
+    return createTable(self, tableName);
+  }).then(() => {
+    return prepareDataChunks(self, tableName, stateLog);
+  }).catch(() => {
+    generateError(self, '\t--[processTableBeforeDataLoading] Cannot create table ' + self._schema + '.' + tableName + '...');
+  });
 }
 
 /**
@@ -57,33 +57,33 @@ const processTableBeforeDataLoading = (self, tableName, stateLog) => {
  * @returns {Promise}
  */
 const getMySqlVersion = self => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            self._mysql.getConnection((error, connection) => {
-                if (error) {
-                    // The connection is undefined.
-                    generateError(self, '\t--[getMySqlVersion] Cannot connect to MySQL server...\n' + error);
-                    resolve();
-                } else {
-                    const sql = 'SELECT VERSION() AS mysql_version;';
-                    connection.query(sql, (err, rows) => {
-                        connection.release();
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      self._mysql.getConnection((error, connection) => {
+        if (error) {
+          // The connection is undefined.
+          generateError(self, '\t--[getMySqlVersion] Cannot connect to MySQL server...\n' + error);
+          resolve();
+        } else {
+          const sql = 'SELECT VERSION() AS mysql_version;';
+          connection.query(sql, (err, rows) => {
+            connection.release();
 
-                        if (err) {
-                            generateError(self, '\t--[getMySqlVersion] ' + err, sql);
-                            resolve();
-                        } else {
-                            const arrVersion   = rows[0].mysql_version.split('.');
-                            const majorVersion = arrVersion[0];
-                            const minorVersion = arrVersion.slice(1).join('');
-                            self._mysqlVersion = +(majorVersion + '.' + minorVersion);
-                            resolve();
-                        }
-                    });
-                }
-            });
-        });
+            if (err) {
+              generateError(self, '\t--[getMySqlVersion] ' + err, sql);
+              resolve();
+            } else {
+              const arrVersion = rows[0].mysql_version.split('.');
+              const majorVersion = arrVersion[0];
+              const minorVersion = arrVersion.slice(1).join('');
+              self._mysqlVersion = +(majorVersion + '.' + minorVersion);
+              resolve();
+            }
+          });
+        }
+      });
     });
+  });
 }
 
 /**
@@ -94,62 +94,62 @@ const getMySqlVersion = self => {
  * @returns {Promise}
  */
 module.exports = self => {
-    return getMySqlVersion(self).then(() => {
-        return migrationStateManager.get(self, 'tables_loaded').then(haveTablesLoaded => {
-            return new Promise((resolve, reject) => {
-                self._mysql.getConnection((error, connection) => {
-                    if (error) {
-                        // The connection is undefined.
-                        generateError(self, '\t--[loadStructureToMigrate] Cannot connect to MySQL server...\n' + error);
-                        reject();
-                    } else {
-                        const sql = 'SHOW FULL TABLES IN `' + self._mySqlDbName + '`;';
-                        connection.query(sql, (strErr, rows) => {
-                            connection.release();
+  return getMySqlVersion(self).then(() => {
+    return migrationStateManager.get(self, 'tables_loaded').then(haveTablesLoaded => {
+      return new Promise((resolve, reject) => {
+        self._mysql.getConnection((error, connection) => {
+          if (error) {
+            // The connection is undefined.
+            generateError(self, '\t--[loadStructureToMigrate] Cannot connect to MySQL server...\n' + error);
+            reject();
+          } else {
+            const sql = 'SHOW FULL TABLES IN `' + self._mySqlDbName + '`;';
+            connection.query(sql, (strErr, rows) => {
+              connection.release();
 
-                            if (strErr) {
-                                generateError(self, '\t--[loadStructureToMigrate] ' + strErr, sql);
-                                reject();
-                            } else {
-                                let tablesCnt              = 0;
-                                let viewsCnt               = 0;
-                                const processTablePromises = [];
+              if (strErr) {
+                generateError(self, '\t--[loadStructureToMigrate] ' + strErr, sql);
+                reject();
+              } else {
+                let tablesCnt = 0;
+                let viewsCnt = 0;
+                const processTablePromises = [];
 
-                                for (let i = 0; i < rows.length; ++i) {
-                                    let relationName = rows[i]['Tables_in_' + self._mySqlDbName];
+                for (let i = 0; i < rows.length; ++i) {
+                  let relationName = rows[i]['Tables_in_' + self._mySqlDbName];
 
-                                    if (rows[i].Table_type === 'BASE TABLE' && self._excludeTables.indexOf(relationName) === -1) {
-                                        relationName = extraConfigProcessor.getTableName(self, relationName, false);
-                                        self._tablesToMigrate.push(relationName);
-                                        self._dicTables[relationName] = new Table(self._logsDirPath + '/' + relationName + '.log');
-                                        processTablePromises.push(processTableBeforeDataLoading(self, relationName, haveTablesLoaded));
-                                        tablesCnt++;
-                                    } else if (rows[i].Table_type === 'VIEW') {
-                                        self._viewsToMigrate.push(relationName);
-                                        viewsCnt++;
-                                    }
-                                }
+                  if (rows[i].Table_type === 'BASE TABLE' && self._excludeTables.indexOf(relationName) === -1) {
+                    relationName = extraConfigProcessor.getTableName(self, relationName, false);
+                    self._tablesToMigrate.push(relationName);
+                    self._dicTables[relationName] = new Table(self._logsDirPath + '/' + relationName + '.log');
+                    processTablePromises.push(processTableBeforeDataLoading(self, relationName, haveTablesLoaded));
+                    tablesCnt++;
+                  } else if (rows[i].Table_type === 'VIEW') {
+                    self._viewsToMigrate.push(relationName);
+                    viewsCnt++;
+                  }
+                }
 
-                                rows            = null;
-                                self._tablesCnt = tablesCnt;
-                                self._viewsCnt  = viewsCnt;
-                                let message     = '\t--[loadStructureToMigrate] Source DB structure is loaded...\n'
-                                                + '\t--[loadStructureToMigrate] Tables to migrate: ' + tablesCnt + '\n'
-                                                + '\t--[loadStructureToMigrate] Views to migrate: ' + viewsCnt;
+                rows = null;
+                self._tablesCnt = tablesCnt;
+                self._viewsCnt = viewsCnt;
+                let message = '\t--[loadStructureToMigrate] Source DB structure is loaded...\n'
+                  + '\t--[loadStructureToMigrate] Tables to migrate: ' + tablesCnt + '\n'
+                  + '\t--[loadStructureToMigrate] Views to migrate: ' + viewsCnt;
 
-                                log(self, message);
+                log(self, message);
 
-                                Promise.all(processTablePromises).then(
-                                    () => {
-                                        migrationStateManager.set(self, 'tables_loaded').then(() => resolve());
-                                    },
-                                    () => reject()
-                                );
-                            }
-                        });
-                    }
-                });
+                Promise.all(processTablePromises).then(
+                  () => {
+                    migrationStateManager.set(self, 'tables_loaded').then(() => resolve());
+                  },
+                  () => reject()
+                );
+              }
             });
+          }
         });
+      });
     });
+  });
 };

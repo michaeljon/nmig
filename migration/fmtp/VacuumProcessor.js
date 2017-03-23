@@ -20,9 +20,9 @@
  */
 'use strict';
 
-const connect              = require('./Connector');
-const log                  = require('./Logger');
-const generateError        = require('./ErrorGenerator');
+const connect = require('./Connector');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
 const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
@@ -33,46 +33,46 @@ const extraConfigProcessor = require('./ExtraConfigProcessor');
  * @returns {Promise}
  */
 module.exports = self => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            const vacuumPromises = [];
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      const vacuumPromises = [];
 
-            for (let i = 0; i < self._tablesToMigrate.length; ++i) {
-                if (self._noVacuum.indexOf(extraConfigProcessor.getTableName(self, self._tablesToMigrate[i], true)) === -1) {
-                    const msg = '\t--[runVacuumFullAndAnalyze] Running "VACUUM FULL and ANALYZE" query for table "'
-                        + self._schema + '"."' + self._tablesToMigrate[i] + '"...';
+      for (let i = 0; i < self._tablesToMigrate.length; ++i) {
+        if (self._noVacuum.indexOf(extraConfigProcessor.getTableName(self, self._tablesToMigrate[i], true)) === -1) {
+          const msg = '\t--[runVacuumFullAndAnalyze] Running "VACUUM FULL and ANALYZE" query for table '
+            + self._schema + '.' + self._tablesToMigrate[i] + '...';
 
-                    log(self, msg);
-                    vacuumPromises.push(
-                        new Promise(resolveVacuum => {
-                            self._pg.connect((error, client, done) => {
-                                if (error) {
-                                    generateError(self, '\t--[runVacuumFullAndAnalyze] Cannot connect to PostgreSQL server...');
-                                    resolveVacuum();
-                                } else {
-                                    const sql = 'VACUUM (FULL, ANALYZE) "' + self._schema + '"."' + self._tablesToMigrate[i] + '";';
-                                    client.query(sql, err => {
-                                        done();
+          log(self, msg);
+          vacuumPromises.push(
+            new Promise(resolveVacuum => {
+              self._pg.connect((error, client, done) => {
+                if (error) {
+                  generateError(self, '\t--[runVacuumFullAndAnalyze] Cannot connect to PostgreSQL server...');
+                  resolveVacuum();
+                } else {
+                  const sql = 'VACUUM (FULL, ANALYZE) ' + self._schema + '.' + self._tablesToMigrate[i] + ';';
+                  client.query(sql, err => {
+                    done();
 
-                                        if (err) {
-                                            generateError(self, '\t--[runVacuumFullAndAnalyze] ' + err, sql);
-                                            resolveVacuum();
-                                        } else {
-                                            const msg2 = '\t--[runVacuumFullAndAnalyze] Table "' + self._schema
-                                                + '"."' + self._tablesToMigrate[i] + '" is VACUUMed...';
+                    if (err) {
+                      generateError(self, '\t--[runVacuumFullAndAnalyze] ' + err, sql);
+                      resolveVacuum();
+                    } else {
+                      const msg2 = '\t--[runVacuumFullAndAnalyze] Table ' + self._schema
+                        + '.' + self._tablesToMigrate[i] + ' is VACUUMed...';
 
-                                            log(self, msg2);
-                                            resolveVacuum();
-                                        }
-                                    });
-                                }
-                            });
-                        })
-                    );
+                      log(self, msg2);
+                      resolveVacuum();
+                    }
+                  });
                 }
-            }
+              });
+            })
+          );
+        }
+      }
 
-            Promise.all(vacuumPromises).then(() => resolve());
-        });
+      Promise.all(vacuumPromises).then(() => resolve());
     });
+  });
 };

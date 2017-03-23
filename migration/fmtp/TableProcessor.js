@@ -121,16 +121,16 @@ module.exports.createTable = (self, tableName) => {
                   generateError(self, '\t--[createTable] Cannot connect to PostgreSQL server...\n' + error, sql);
                   rejectCreateTable();
                 } else {
-                  sql = 'CREATE TABLE IF NOT EXISTS "' + self._schema + '"."' + tableName + '"(';
+                  sql = 'CREATE TABLE IF NOT EXISTS ' + self._schema + '.' + tableName + ' (';
 
                   for (let i = 0; i < rows.length; ++i) {
-                    sql += '"' + extraConfigProcessor.getColumnName(self, originalTableName, rows[i].Field, false)
-                      + '" ' + mapDataTypes(self._dataTypesMap, rows[i].Type) + ',';
+                    sql += extraConfigProcessor.getColumnName(self, originalTableName, rows[i].Field, false)
+                      + ' ' + mapDataTypes(self._dataTypesMap, rows[i].Type) + ',';
                   }
 
-                  sql += '"' + self._schema + '_' + originalTableName + '_data_chunk_id_temp" BIGINT);';
+                  sql += self._schema + '_' + originalTableName + '_data_chunk_id_temp BIGINT);';
 
-                  log(self, '\t--[createTable] with command: \n' + sql, self._dicTables[tableName].tableLogPath);
+                  // log(self, '\t--[createTable] with command: \n' + sql, self._dicTables[tableName].tableLogPath);
 
                   client.query(sql, err => {
                     done();
@@ -141,7 +141,7 @@ module.exports.createTable = (self, tableName) => {
                     } else {
                       log(
                         self,
-                        '\t--[createTable] Table "' + self._schema + '"."' + tableName + '" is created...',
+                        '\t--[createTable] Table ' + self._schema + '.' + tableName + ' is created...',
                         self._dicTables[tableName].tableLogPath
                       );
 

@@ -20,10 +20,10 @@
  */
 'use strict';
 
-const connect              = require('./Connector');
-const log                  = require('./Logger');
-const generateError        = require('./ErrorGenerator');
-const arrangeColumnsData   = require('./ColumnsDataArranger');
+const connect = require('./Connector');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
+const arrangeColumnsData = require('./ColumnsDataArranger');
 const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
@@ -36,95 +36,95 @@ const extraConfigProcessor = require('./ExtraConfigProcessor');
  * @returns {Promise}
  */
 module.exports = (self, tableName, haveDataChunksProcessed) => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            if (haveDataChunksProcessed) {
-                return resolve();
-            }
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      if (haveDataChunksProcessed) {
+        return resolve();
+      }
 
-            self._mysql.getConnection((error, connection) => {
-                if (error) {
-                    // The connection is undefined.
-                    generateError(self, '\t--[prepareDataChunks] Cannot connect to MySQL server...\n\t' + error);
-                    resolve();
+      self._mysql.getConnection((error, connection) => {
+        if (error) {
+          // The connection is undefined.
+          generateError(self, '\t--[prepareDataChunks] Cannot connect to MySQL server...\n\t' + error);
+          resolve();
+        } else {
+          // Determine current table size, apply "chunking".
+          const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
+          let sql = "SELECT (data_length / 1024 / 1024) AS size_in_mb "
+            + "FROM information_schema.tables "
+            + "WHERE table_schema = '" + self._mySqlDbName + "' "
+            + "AND table_name = '" + originalTableName + "';";
+
+          connection.query(sql, (err, rows) => {
+            if (err) {
+              connection.release();
+              generateError(self, '\t--[prepareDataChunks] ' + err, sql);
+              resolve();
+            } else {
+              let tableSizeInMb = +rows[0].size_in_mb;
+              tableSizeInMb = tableSizeInMb < 1 ? 1 : tableSizeInMb;
+              rows = null;
+              sql = 'SELECT COUNT(1) AS rows_count FROM `' + originalTableName + '`;';
+              const strSelectFieldList = arrangeColumnsData(
+                self._dicTables[tableName].arrTableColumns,
+                self._mysqlVersion
+              );
+
+              connection.query(sql, (err2, rows2) => {
+                connection.release();
+
+                if (err2) {
+                  generateError(self, '\t--[prepareDataChunks] ' + err2, sql);
+                  resolve();
                 } else {
-                    // Determine current table size, apply "chunking".
-                    const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
-                    let sql                 = "SELECT (data_length / 1024 / 1024) AS size_in_mb "
-                        + "FROM information_schema.tables "
-                        + "WHERE table_schema = '" + self._mySqlDbName + "' "
-                        + "AND table_name = '" + originalTableName + "';";
+                  const rowsCnt = rows2[0].rows_count;
+                  rows2 = null;
+                  let chunksCnt = tableSizeInMb / self._dataChunkSize;
+                  chunksCnt = chunksCnt < 1 ? 1 : chunksCnt;
+                  const rowsInChunk = Math.ceil(rowsCnt / chunksCnt);
+                  const arrDataPoolPromises = [];
+                  const msg = '\t--[prepareDataChunks] Total rows to insert into '
+                    + self._schema + '.' + tableName + ': ' + rowsCnt;
 
-                    connection.query(sql, (err, rows) => {
-                        if (err) {
-                            connection.release();
-                            generateError(self, '\t--[prepareDataChunks] ' + err, sql);
-                            resolve();
+                  log(self, msg, self._dicTables[tableName].tableLogPath);
+
+                  for (let offset = 0; offset < rowsCnt; offset += rowsInChunk) {
+                    arrDataPoolPromises.push(new Promise(resolveDataUnit => {
+                      self._pg.connect((error, client, done) => {
+                        if (error) {
+                          generateError(self, '\t--[prepareDataChunks] Cannot connect to PostgreSQL server...\n' + error);
+                          resolveDataUnit();
                         } else {
-                            let tableSizeInMb        = +rows[0].size_in_mb;
-                            tableSizeInMb            = tableSizeInMb < 1 ? 1 : tableSizeInMb;
-                            rows                     = null;
-                            sql                      = 'SELECT COUNT(1) AS rows_count FROM `' + originalTableName + '`;';
-                            const strSelectFieldList = arrangeColumnsData(
-                                self._dicTables[tableName].arrTableColumns,
-                                self._mysqlVersion
-                            );
+                          const strJson = '{"_tableName":"' + tableName
+                            + '","_selectFieldList":"' + strSelectFieldList + '",'
+                            + '"_offset":' + offset + ','
+                            + '"_rowsInChunk":' + rowsInChunk + ','
+                            + '"_rowsCnt":' + rowsCnt + '}';
 
-                            connection.query(sql, (err2, rows2) => {
-                                connection.release();
+                          sql = 'INSERT INTO ' + self._schema + '.data_pool_' + self._schema
+                            + self._mySqlDbName + ' ("is_started", "json") VALUES (FALSE, $1);';
 
-                                if (err2) {
-                                    generateError(self, '\t--[prepareDataChunks] ' + err2, sql);
-                                    resolve();
-                                } else {
-                                    const rowsCnt             = rows2[0].rows_count;
-                                    rows2                     = null;
-                                    let chunksCnt             = tableSizeInMb / self._dataChunkSize;
-                                    chunksCnt                 = chunksCnt < 1 ? 1 : chunksCnt;
-                                    const rowsInChunk         = Math.ceil(rowsCnt / chunksCnt);
-                                    const arrDataPoolPromises = [];
-                                    const msg                 = '\t--[prepareDataChunks] Total rows to insert into '
-                                        + '"' + self._schema + '"."' + tableName + '": ' + rowsCnt;
+                          client.query(sql, [strJson], err => {
+                            done();
 
-                                    log(self, msg, self._dicTables[tableName].tableLogPath);
+                            if (err) {
+                              generateError(self, '\t--[prepareDataChunks] INSERT failed...\n' + err, sql);
+                            }
 
-                                    for (let offset = 0; offset < rowsCnt; offset += rowsInChunk) {
-                                        arrDataPoolPromises.push(new Promise(resolveDataUnit => {
-                                            self._pg.connect((error, client, done) => {
-                                                if (error) {
-                                                    generateError(self, '\t--[prepareDataChunks] Cannot connect to PostgreSQL server...\n' + error);
-                                                    resolveDataUnit();
-                                                } else {
-                                                    const strJson = '{"_tableName":"' + tableName
-                                                        + '","_selectFieldList":"' + strSelectFieldList + '",'
-                                                        + '"_offset":' + offset + ','
-                                                        + '"_rowsInChunk":' + rowsInChunk + ','
-                                                        + '"_rowsCnt":' + rowsCnt + '}';
-
-                                                    sql = 'INSERT INTO "' + self._schema + '"."data_pool_' + self._schema
-                                                        + self._mySqlDbName + '"("is_started", "json") VALUES(FALSE, $1);';
-
-                                                    client.query(sql, [strJson], err => {
-                                                        done();
-
-                                                        if (err) {
-                                                            generateError(self, '\t--[prepareDataChunks] INSERT failed...\n' + err, sql);
-                                                        }
-
-                                                        resolveDataUnit();
-                                                    });
-                                                }
-                                            });
-                                        }));
-                                    }
-
-                                    Promise.all(arrDataPoolPromises).then(() => resolve());
-                                }
-                            });
+                            resolveDataUnit();
+                          });
                         }
-                    });
+                      });
+                    }));
+                  }
+
+                  Promise.all(arrDataPoolPromises).then(() => resolve());
                 }
-            });
-        });
+              });
+            }
+          });
+        }
+      });
     });
+  });
 };

@@ -20,12 +20,12 @@
  */
 'use strict';
 
-const childProcess        = require('child_process');
-const path                = require('path');
-const log                 = require('./Logger');
-const generateError       = require('./ErrorGenerator');
+const childProcess = require('child_process');
+const path = require('path');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
 const MessageToDataLoader = require('./MessageToDataLoader');
-const processConstraints  = require('./ConstraintsProcessor');
+const processConstraints = require('./ConstraintsProcessor');
 
 /**
  * Kill a process specified by the pid.
@@ -35,11 +35,11 @@ const processConstraints  = require('./ConstraintsProcessor');
  * @returns {undefined}
  */
 const killProcess = pid => {
-    try {
-        process.kill(pid);
-    } catch (killError) {
-        generateError(self, '\t--[killProcess] ' + killError);
-    }
+  try {
+    process.kill(pid);
+  } catch (killError) {
+    generateError(self, '\t--[killProcess] ' + killError);
+  }
 }
 
 /**
@@ -51,7 +51,7 @@ const killProcess = pid => {
  * @returns {Boolean}
  */
 const reachedLastIndex = (self, currentIndex) => {
-    return self._dataPool.length <= currentIndex;
+  return self._dataPool.length <= currentIndex;
 }
 
 /**
@@ -62,7 +62,7 @@ const reachedLastIndex = (self, currentIndex) => {
  * @returns {Boolean}
  */
 const dataPoolProcessed = self => {
-    return self._processedChunks >= self._dataPool.length;
+  return self._processedChunks >= self._dataPool.length;
 }
 
 /**
@@ -78,39 +78,39 @@ const dataPoolProcessed = self => {
  * @returns {undefined}
  */
 const pipeData = (self, strDataLoaderPath, options, currentIndex) => {
-    if (dataPoolProcessed(self) && !self._isProcessConstraintsLocked) {
-        self._isProcessConstraintsLocked = true;
-        return processConstraints(self);
+  if (dataPoolProcessed(self) && !self._isProcessConstraintsLocked) {
+    self._isProcessConstraintsLocked = true;
+    return processConstraints(self);
+  }
+
+  if (reachedLastIndex(self, currentIndex)) {
+    /*
+     * Not all of data chunks were processed, but current "execution branch" has processed all of its chunks.
+     * In this case no "loader" process will be spawned.
+     * The processConstraints() function will be invoked from another "execution branch".
+     */
+    return;
+  }
+
+  const endOfSlice = self._dataPool.length - (self._dataPool.length - self._pipeWidth - currentIndex);
+  const nextPoolIndex = currentIndex + self._pipeWidth * self._maxLoaderProcesses;
+  const loaderProcess = childProcess.fork(strDataLoaderPath, options);
+
+  loaderProcess.on('message', signal => {
+    if (typeof signal === 'object') {
+      self._dicTables[signal.tableName].totalRowsInserted += signal.rowsInserted;
+      const msg = '\t--[pipeData]  For now inserted: ' + self._dicTables[signal.tableName].totalRowsInserted + ' rows, '
+        + 'Total rows to insert into ' + self._schema + '.' + signal.tableName + ': ' + signal.totalRowsToInsert;
+
+      log(self, msg);
+    } else {
+      killProcess(loaderProcess.pid);
+      self._processedChunks += self._pipeWidth;
+      return pipeData(self, strDataLoaderPath, options, nextPoolIndex);
     }
+  });
 
-    if (reachedLastIndex(self, currentIndex)) {
-        /*
-         * Not all of data chunks were processed, but current "execution branch" has processed all of its chunks.
-         * In this case no "loader" process will be spawned.
-         * The processConstraints() function will be invoked from another "execution branch".
-         */
-        return;
-    }
-
-    const endOfSlice    = self._dataPool.length - (self._dataPool.length - self._pipeWidth - currentIndex);
-    const nextPoolIndex = currentIndex + self._pipeWidth * self._maxLoaderProcesses;
-    const loaderProcess = childProcess.fork(strDataLoaderPath, options);
-
-    loaderProcess.on('message', signal => {
-        if (typeof signal === 'object') {
-            self._dicTables[signal.tableName].totalRowsInserted += signal.rowsInserted;
-            const msg = '\t--[pipeData]  For now inserted: ' + self._dicTables[signal.tableName].totalRowsInserted + ' rows, '
-                + 'Total rows to insert into "' + self._schema + '"."' + signal.tableName + '": ' + signal.totalRowsToInsert;
-
-            log(self, msg);
-        } else {
-            killProcess(loaderProcess.pid);
-            self._processedChunks += self._pipeWidth;
-            return pipeData(self, strDataLoaderPath, options, nextPoolIndex);
-        }
-    });
-
-    loaderProcess.send(new MessageToDataLoader(self._config, self._dataPool.slice(currentIndex, endOfSlice)));
+  loaderProcess.send(new MessageToDataLoader(self._config, self._dataPool.slice(currentIndex, endOfSlice)));
 }
 
 /**
@@ -121,20 +121,20 @@ const pipeData = (self, strDataLoaderPath, options, currentIndex) => {
  * @returns {undefined}
  */
 module.exports = self => {
-    if (self._dataPool.length === 0) {
-        return processConstraints(self);
-    }
+  if (self._dataPool.length === 0) {
+    return processConstraints(self);
+  }
 
-    const strDataLoaderPath = path.join(__dirname, 'DataLoader.js');
-    const options           = self._loaderMaxOldSpaceSize === 'DEFAULT'
-        ? Object.create(null)
-        : { execArgv: ['--max-old-space-size=' + self._loaderMaxOldSpaceSize] };
+  const strDataLoaderPath = path.join(__dirname, 'DataLoader.js');
+  const options = self._loaderMaxOldSpaceSize === 'DEFAULT'
+    ? Object.create(null)
+    : { execArgv: ['--max-old-space-size=' + self._loaderMaxOldSpaceSize] };
 
-    for (
-        let intProcIter = 0, intCurrentIndex = 0;
-        intProcIter < self._maxLoaderProcesses;
-        ++intProcIter, intCurrentIndex += self._pipeWidth
-    ) {
-        pipeData(self, strDataLoaderPath, options, intCurrentIndex);
-    }
+  for (
+    let intProcIter = 0, intCurrentIndex = 0;
+    intProcIter < self._maxLoaderProcesses;
+    ++intProcIter, intCurrentIndex += self._pipeWidth
+  ) {
+    pipeData(self, strDataLoaderPath, options, intCurrentIndex);
+  }
 };

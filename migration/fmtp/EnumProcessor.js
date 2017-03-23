@@ -20,10 +20,10 @@
  */
 'use strict';
 
-const connect               = require('./Connector');
-const log                   = require('./Logger');
-const generateError         = require('./ErrorGenerator');
-const extraConfigProcessor  = require('./ExtraConfigProcessor');
+const connect = require('./Connector');
+const log = require('./Logger');
+const generateError = require('./ErrorGenerator');
+const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
  * Define which columns of the given table are of type "enum".
@@ -35,61 +35,61 @@ const extraConfigProcessor  = require('./ExtraConfigProcessor');
  * @returns {Promise}
  */
 module.exports = (self, tableName) => {
-    return connect(self).then(() => {
-        return new Promise(resolve => {
-            log(self, '\t--[processEnum] Defines "ENUMs" for table "' + self._schema + '"."' + tableName + '"', self._dicTables[tableName].tableLogPath);
-            const processEnumPromises = [];
-            const originalTableName   = extraConfigProcessor.getTableName(self, tableName, true);
+  return connect(self).then(() => {
+    return new Promise(resolve => {
+      log(self, '\t--[processEnum] Defines "ENUMs" for table ' + self._schema + '.' + tableName + '', self._dicTables[tableName].tableLogPath);
+      const processEnumPromises = [];
+      const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
 
-            for (let i = 0; i < self._dicTables[tableName].arrTableColumns.length; ++i) {
-                if (self._dicTables[tableName].arrTableColumns[i].Type.indexOf('(') !== -1) {
-                    const arrType = self._dicTables[tableName].arrTableColumns[i].Type.split('(');
+      for (let i = 0; i < self._dicTables[tableName].arrTableColumns.length; ++i) {
+        if (self._dicTables[tableName].arrTableColumns[i].Type.indexOf('(') !== -1) {
+          const arrType = self._dicTables[tableName].arrTableColumns[i].Type.split('(');
 
-                    if (arrType[0] === 'enum') {
-                        processEnumPromises.push(
-                            new Promise(resolveProcessEnum => {
-                                self._pg.connect((error, client, done) => {
-                                    if (error) {
-                                        const msg = '\t--[processEnum] Cannot connect to PostgreSQL server...\n' + error;
-                                        generateError(self, msg);
-                                        resolveProcessEnum();
-                                    } else {
-                                        const columnName = extraConfigProcessor.getColumnName(
-                                            self,
-                                            originalTableName,
-                                            self._dicTables[tableName].arrTableColumns[i].Field,
-                                            false
-                                        );
+          if (arrType[0] === 'enum') {
+            processEnumPromises.push(
+              new Promise(resolveProcessEnum => {
+                self._pg.connect((error, client, done) => {
+                  if (error) {
+                    const msg = '\t--[processEnum] Cannot connect to PostgreSQL server...\n' + error;
+                    generateError(self, msg);
+                    resolveProcessEnum();
+                  } else {
+                    const columnName = extraConfigProcessor.getColumnName(
+                      self,
+                      originalTableName,
+                      self._dicTables[tableName].arrTableColumns[i].Field,
+                      false
+                    );
 
-                                        const sql = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" '
-                                            + 'ADD CHECK ("' + columnName + '" IN (' + arrType[1] + ');';
+                    const sql = 'ALTER TABLE ' + self._schema + '.' + tableName + ' '
+                      + 'ADD CHECK (' + columnName + ' IN (' + arrType[1] + ');';
 
-                                        client.query(sql, err => {
-                                            done();
+                    client.query(sql, err => {
+                      done();
 
-                                            if (err) {
-                                                const msg2 = '\t--[processEnum] Error while setting ENUM for "' + self._schema + '"."'
-                                                    + tableName + '"."' + columnName + '"...\n' + err;
+                      if (err) {
+                        const msg2 = '\t--[processEnum] Error while setting ENUM for ' + self._schema + '.'
+                          + tableName + '.' + columnName + '...\n' + err;
 
-                                                generateError(self, msg2, sql);
-                                                resolveProcessEnum();
-                                            } else {
-                                                const success = '\t--[processEnum] Set "ENUM" for "' + self._schema + '"."' + tableName
-                                                            + '"."' + columnName + '"...';
+                        generateError(self, msg2, sql);
+                        resolveProcessEnum();
+                      } else {
+                        const success = '\t--[processEnum] Set "ENUM" for ' + self._schema + '.' + tableName
+                          + '.' + columnName + '...';
 
-                                                log(self, success, self._dicTables[tableName].tableLogPath);
-                                                resolveProcessEnum();
-                                            }
-                                        });
-                                    }
-                                });
-                            })
-                        );
-                    }
-                }
-            }
+                        log(self, success, self._dicTables[tableName].tableLogPath);
+                        resolveProcessEnum();
+                      }
+                    });
+                  }
+                });
+              })
+            );
+          }
+        }
+      }
 
-            Promise.all(processEnumPromises).then(() => resolve());
-        });
+      Promise.all(processEnumPromises).then(() => resolve());
     });
+  });
 };

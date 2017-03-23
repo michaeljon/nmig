@@ -20,7 +20,7 @@
  */
 'use strict';
 
-const generateError        = require('./ErrorGenerator');
+const generateError = require('./ErrorGenerator');
 const extraConfigProcessor = require('./ExtraConfigProcessor');
 
 /**
@@ -32,27 +32,27 @@ const extraConfigProcessor = require('./ExtraConfigProcessor');
  * @returns {Promise}
  */
 const updateConsistencyState = (self, dataPoolId) => {
-    return new Promise(resolve => {
-        self._pg.connect((error, client, done) => {
-            if (error) {
-                generateError(self, '\t--[ConsistencyEnforcer.updateConsistencyState] Cannot connect to PostgreSQL server...\n' + error);
-                resolve();
-            } else {
-                const sql = 'UPDATE "' + self._schema + '"."data_pool_' + self._schema
-                    + self._mySqlDbName + '" SET is_started = TRUE WHERE id = ' + dataPoolId + ';';
+  return new Promise(resolve => {
+    self._pg.connect((error, client, done) => {
+      if (error) {
+        generateError(self, '\t--[ConsistencyEnforcer.updateConsistencyState] Cannot connect to PostgreSQL server...\n' + error);
+        resolve();
+      } else {
+        const sql = 'UPDATE ' + self._schema + '.data_pool_' + self._schema
+          + self._mySqlDbName + ' SET is_started = TRUE WHERE id = ' + dataPoolId + ';';
 
-                client.query(sql, err => {
-                    done();
+        client.query(sql, err => {
+          done();
 
-                    if (err) {
-                        generateError(self, '\t--[ConsistencyEnforcer.updateConsistencyState] ' + err, sql);
-                    }
+          if (err) {
+            generateError(self, '\t--[ConsistencyEnforcer.updateConsistencyState] ' + err, sql);
+          }
 
-                    resolve();
-                });
-            }
+          resolve();
         });
+      }
     });
+  });
 }
 
 /**
@@ -65,28 +65,28 @@ const updateConsistencyState = (self, dataPoolId) => {
  */
 
 const getIsStarted = (self, dataPoolId) => {
-    return new Promise(resolve => {
-        self._pg.connect((error, client, done) => {
-            if (error) {
-                generateError(self, '\t--[ConsistencyEnforcer.getConsistencyState] Cannot connect to PostgreSQL server...\n' + error);
-                resolve(false);
-            } else {
-                const sql = 'SELECT is_started AS is_started FROM "' + self._schema + '"."data_pool_' + self._schema
-                    + self._mySqlDbName + '" WHERE id = ' + dataPoolId + ';';
+  return new Promise(resolve => {
+    self._pg.connect((error, client, done) => {
+      if (error) {
+        generateError(self, '\t--[ConsistencyEnforcer.getConsistencyState] Cannot connect to PostgreSQL server...\n' + error);
+        resolve(false);
+      } else {
+        const sql = 'SELECT is_started AS is_started FROM ' + self._schema + '.data_pool_' + self._schema
+          + self._mySqlDbName + ' WHERE id = ' + dataPoolId + ';';
 
-                client.query(sql, (err, data) => {
-                    done();
+        client.query(sql, (err, data) => {
+          done();
 
-                    if (err) {
-                        generateError(self, '\t--[ConsistencyEnforcer.getConsistencyState] ' + err, sql);
-                        resolve(false);
-                    } else {
-                        resolve(data.rows[0].is_started);
-                    }
-                });
-            }
+          if (err) {
+            generateError(self, '\t--[ConsistencyEnforcer.getConsistencyState] ' + err, sql);
+            resolve(false);
+          } else {
+            resolve(data.rows[0].is_started);
+          }
         });
+      }
     });
+  });
 }
 
 /**
@@ -100,29 +100,29 @@ const getIsStarted = (self, dataPoolId) => {
  * @returns {Promise}
  */
 const hasCurrentChunkLoaded = (self, chunk) => {
-    return new Promise(resolve => {
-        self._pg.connect((pgError, client, done) => {
-            if (pgError) {
-                generateError(self, '\t--[ConsistencyEnforcer::hasCurrentChunkLoaded] Cannot connect to PostgreSQL server...\n' + pgError);
-                resolve(true);
-            } else {
-                const originalTableName = extraConfigProcessor.getTableName(self, chunk._tableName, true);
-                const sql               = 'SELECT EXISTS(SELECT 1 FROM "' + self._schema + '"."' + chunk._tableName
-                    + '" WHERE "' + self._schema + '_' + originalTableName + '_data_chunk_id_temp" = ' + chunk._id + ');';
+  return new Promise(resolve => {
+    self._pg.connect((pgError, client, done) => {
+      if (pgError) {
+        generateError(self, '\t--[ConsistencyEnforcer::hasCurrentChunkLoaded] Cannot connect to PostgreSQL server...\n' + pgError);
+        resolve(true);
+      } else {
+        const originalTableName = extraConfigProcessor.getTableName(self, chunk._tableName, true);
+        const sql = 'SELECT EXISTS(SELECT 1 FROM ' + self._schema + + chunk._tableName
+          + ' WHERE ' + self._schema + '_' + originalTableName + '_data_chunk_id_temp = ' + chunk._id + ');';
 
-                client.query(sql, (err, result) => {
-                    done();
+        client.query(sql, (err, result) => {
+          done();
 
-                    if (err) {
-                        generateError(self, '\t--[ConsistencyEnforcer::hasCurrentChunkLoaded] ' + err, sql);
-                        resolve(true);
-                    } else {
-                        resolve(!!result.rows[0].exists);
-                    }
-                });
-            }
+          if (err) {
+            generateError(self, '\t--[ConsistencyEnforcer::hasCurrentChunkLoaded] ' + err, sql);
+            resolve(true);
+          } else {
+            resolve(!!result.rows[0].exists);
+          }
         });
+      }
     });
+  });
 }
 
 /**
@@ -134,16 +134,16 @@ const hasCurrentChunkLoaded = (self, chunk) => {
  * @returns {Promise}
  */
 const getConsistencyState = (self, chunk) => {
-    return new Promise(resolve => {
-        getIsStarted(self, chunk._id).then(isStarted => {
-            if (isStarted) {
-                hasCurrentChunkLoaded(self, chunk).then(result => resolve(result));
-            } else {
-                // Normal migration flow.
-                resolve(false);
-            }
-        });
+  return new Promise(resolve => {
+    getIsStarted(self, chunk._id).then(isStarted => {
+      if (isStarted) {
+        hasCurrentChunkLoaded(self, chunk).then(result => resolve(result));
+      } else {
+        // Normal migration flow.
+        resolve(false);
+      }
     });
+  });
 }
 
 /**
@@ -158,20 +158,20 @@ const getConsistencyState = (self, chunk) => {
  * @returns {Promise}
  */
 module.exports.enforceConsistency = (self, chunk) => {
-    return new Promise(resolve => {
-        getConsistencyState(self, chunk).then(hasAlreadyBeenLoaded => {
-            if (hasAlreadyBeenLoaded) {
-                /*
-                 * Current data chunk runs after a disaster recovery.
-                 * It has already been loaded.
-                 */
-                resolve(false);
-            } else {
-                // Normal migration flow.
-                updateConsistencyState(self, chunk._id).then(() => resolve(true));
-            }
-        })
-    });
+  return new Promise(resolve => {
+    getConsistencyState(self, chunk).then(hasAlreadyBeenLoaded => {
+      if (hasAlreadyBeenLoaded) {
+        /*
+         * Current data chunk runs after a disaster recovery.
+         * It has already been loaded.
+         */
+        resolve(false);
+      } else {
+        // Normal migration flow.
+        updateConsistencyState(self, chunk._id).then(() => resolve(true));
+      }
+    })
+  });
 };
 
 /**
@@ -183,29 +183,29 @@ module.exports.enforceConsistency = (self, chunk) => {
  * @returns {Promise}
  */
 module.exports.dropDataChunkIdColumn = (self, tableName) => {
-    return new Promise(resolve => {
-        self._pg.connect((pgError, client, done) => {
-            if (pgError) {
-                generateError(self, '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] Cannot connect to PostgreSQL server...\n' + pgError);
-                resolve();
-            } else {
-                const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
-                const columnToDrop      = self._schema + '_' + originalTableName + '_data_chunk_id_temp';
-                const sql               = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" DROP COLUMN "' + columnToDrop + '";';
+  return new Promise(resolve => {
+    self._pg.connect((pgError, client, done) => {
+      if (pgError) {
+        generateError(self, '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] Cannot connect to PostgreSQL server...\n' + pgError);
+        resolve();
+      } else {
+        const originalTableName = extraConfigProcessor.getTableName(self, tableName, true);
+        const columnToDrop = self._schema + '_' + originalTableName + '_data_chunk_id_temp';
+        const sql = 'ALTER TABLE ' + self._schema + '.' + tableName + ' DROP COLUMN ' + columnToDrop + ';';
 
-                client.query(sql, (err, result) => {
-                    done();
+        client.query(sql, (err, result) => {
+          done();
 
-                    if (err) {
-                        const errMsg = '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] Failed to drop column "' + columnToDrop + '"\n'
-                            + '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] '+ err;
+          if (err) {
+            const errMsg = '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] Failed to drop column ' + columnToDrop + '\n'
+              + '\t--[ConsistencyEnforcer::dropDataChunkIdColumn] ' + err;
 
-                        generateError(self, errMsg, sql);
-                    }
+            generateError(self, errMsg, sql);
+          }
 
-                    resolve();
-                });
-            }
+          resolve();
         });
+      }
     });
+  });
 };

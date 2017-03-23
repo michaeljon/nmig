@@ -52,12 +52,12 @@ const processForeignKeyWorker = (self, tableName, rows) => {
       );
 
       if (rows[i].CONSTRAINT_NAME in objConstraints) {
-        objConstraints[rows[i].CONSTRAINT_NAME].column_name.push('"' + currentColumnName + '"');
-        objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push('"' + currentReferencedColumnName + '"');
+        objConstraints[rows[i].CONSTRAINT_NAME].column_name.push(currentColumnName);
+        objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name.push(currentReferencedColumnName);
       } else {
         objConstraints[rows[i].CONSTRAINT_NAME] = Object.create(null);
-        objConstraints[rows[i].CONSTRAINT_NAME].column_name = ['"' + currentColumnName + '"'];
-        objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = ['"' + currentReferencedColumnName + '"'];
+        objConstraints[rows[i].CONSTRAINT_NAME].column_name = [currentColumnName];
+        objConstraints[rows[i].CONSTRAINT_NAME].referenced_column_name = [currentReferencedColumnName];
         objConstraints[rows[i].CONSTRAINT_NAME].referenced_table_name = currentReferencedTableName;
         objConstraints[rows[i].CONSTRAINT_NAME].update_rule = rows[i].UPDATE_RULE;
         objConstraints[rows[i].CONSTRAINT_NAME].delete_rule = rows[i].DELETE_RULE;
@@ -75,9 +75,9 @@ const processForeignKeyWorker = (self, tableName, rows) => {
               generateError(self, '\t--[processForeignKeyWorker] Cannot connect to PostgreSQL server...');
               resolveConstraintPromise();
             } else {
-              const sql = 'ALTER TABLE "' + self._schema + '"."' + tableName + '" ADD FOREIGN KEY ('
-                + objConstraints[attr].column_name.join(',') + ') REFERENCES "' + self._schema + '"."'
-                + objConstraints[attr].referenced_table_name + '" (' + objConstraints[attr].referenced_column_name.join(',')
+              const sql = 'ALTER TABLE ' + self._schema + '.' + tableName + ' ADD FOREIGN KEY ('
+                + objConstraints[attr].column_name.join(',') + ') REFERENCES ' + self._schema + '.'
+                + objConstraints[attr].referenced_table_name + ' (' + objConstraints[attr].referenced_column_name.join(',')
                 + ') ON UPDATE ' + objConstraints[attr].update_rule + ' ON DELETE ' + objConstraints[attr].delete_rule + ';';
 
               objConstraints[attr] = null;
@@ -116,7 +116,7 @@ module.exports = self => {
       if (!isForeignKeysProcessed) {
         for (let i = 0; i < self._tablesToMigrate.length; ++i) {
           const tableName = self._tablesToMigrate[i];
-          log(self, '\t--[processForeignKey] Search foreign keys for table "' + self._schema + '"."' + tableName + '"...');
+          log(self, '\t--[processForeignKey] Search foreign keys for table ' + self._schema + '.' + tableName + '...');
           fkPromises.push(
             new Promise(fkResolve => {
               self._mysql.getConnection((error, connection) => {
@@ -155,7 +155,7 @@ module.exports = self => {
                       fkResolve();
                     } else {
                       processForeignKeyWorker(self, tableName, rows).then(() => {
-                        log(self, '\t--[processForeignKey] Foreign keys for table "' + self._schema + '"."' + tableName + '" are set...');
+                        log(self, '\t--[processForeignKey] Foreign keys for table ' + self._schema + '.' + tableName + ' are set...');
                         fkResolve();
                       });
                     }
